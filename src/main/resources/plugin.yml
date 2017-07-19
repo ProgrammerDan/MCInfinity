@@ -1,0 +1,30 @@
+name: ${project.name}
+version: ${project.version}
+author: [ProgrammerDan]
+depend: [ProtocolLib]
+main: com.programmerdan.minecraft.mcinfinity.MCInfinity
+commands:
+ mcinfinity:
+  description: Shows the commands useable for this plugin
+  usage: |
+   The following are commands available for use:
+   /mcinfinity.tp <layer> <zone> <offsetx> <offsetz> <y>
+   /mcinfinity.tp universe <offsetx> <offsetz> 
+  alias: mci
+  permission: mcinfinity.*
+ mcinfinity.tp:
+  description: Teleport to various points in the universe
+  usage: |
+   /mcinfinity.tp <layer> <zone> <offsetx> <offsetz> <y>
+   /mcinfinity.tp universe <offsetx> <offsetz> 
+  alias: mci.tp
+  permission: mcinfinity.tp  
+permissions:
+ mcinfinity.*:
+  description: Gives access to all MCInfinity commands
+  default: op
+  children:
+   mcinfinity.tp: true
+  mcinfinity.tp:
+   description: Allows operators to move freely from zone to zone
+   default: op
