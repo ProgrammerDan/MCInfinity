@@ -8,6 +8,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
+import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 import com.programmerdan.minecraft.mcinfinity.util.RandomProvider;
 
 public class MCILayer {
@@ -17,7 +18,8 @@ public class MCILayer {
 		RIGHT,
 		BACK,
 		TOP,
-		BOTTOM
+		BOTTOM,
+		UNCLEAR
 	}
 	public static enum Heading {
 		NORTHERLY,
@@ -144,7 +146,7 @@ public class MCILayer {
 		if (location.getWorld() == this.mcWorld) {
 			int x = location.getBlockX();
 			int z = location.getBlockZ();
-			return ( x >= 0 && x < maxX && z >= 0 && z <= maxZ && (
+			return ( x >= 0 && x < maxX && z >= 0 && z < maxZ && (
 					((x < blockEdge || x >= blockEdge2) && z >= blockEdge && z < blockEdge2)
 					||
 					x >= blockEdge && x < blockEdge2)
@@ -156,28 +158,40 @@ public class MCILayer {
 	/**
 	 * Compute our "zone" location.
 	 * 
-	 * @param x
-	 * @param z
-	 * @return
+	 * @param x block location x
+	 * @param z block location z
+	 * @return one of Zone values
 	 */
 	public Zone getZone(int x, int z) {
-		if (x >= 0 && x < blockEdge) { // always assume valid
-			return Zone.LEFT;
+		if (x >= 0 && x < blockEdge) {
+			if (z >= blockEdge && z < blockEdge2) {
+				return Zone.LEFT;
+			}
 		} else if (x < blockEdge2) {
 			if (z >= 0 && z < blockEdge) {
 				return Zone.TOP;
 			} else if (z < blockEdge2) {
 				return Zone.FRONT;
-			} else {
+			} else if (z < maxZ){
 				return Zone.BOTTOM;
 			}
-		} else if (x < maxZ) {
-			return Zone.RIGHT;
-		} else {
-			return Zone.BACK;
+		} else if (z >= blockEdge && z < blockEdge2) {
+			if (x < maxZ) {
+				return Zone.RIGHT;
+			} else if (x < maxX) {
+				return Zone.BACK;
+			}
 		}
+		return Zone.UNCLEAR;
 	}
 	
+	/**
+	 * Given a coordinate set, compute our "heading" in rough terms
+	 * 
+	 * @param dX delta X
+	 * @param dZ delta Z
+	 * @return one of Heading values
+	 */
 	public Heading getHeading(double dX, double dZ) {
 		double aX = Math.abs(dX);
 		double aZ = Math.abs(dZ);
@@ -203,6 +217,91 @@ public class MCILayer {
 			return Heading.UNCLEAR;
 		}
 	}
+	
+	/**
+	 * Determines on which edge the location is leaving the mentioned zone.
+	 * 
+	 * @param now
+	 * @param then
+	 * @return
+	 */
+	public Heading getDepartureEdge(Zone now, Location then) {
+		double x = then.getX();
+		double z = then.getZ();
+		switch(now) {		
+		case BACK:
+			if (x >= maxX) {
+				return Heading.EASTERLY;
+			} else if (z < blockEdge) {
+				return Heading.NORTHERLY;
+			} else if (z >= blockEdge2) {
+				return Heading.SOUTHERLY;
+			}
+			break;
+		case BOTTOM:
+			if (z >= maxZ) {
+				return Heading.SOUTHERLY;
+			} else if (x < blockEdge) {
+				return Heading.WESTERLY;
+			} else if (x >= blockEdge2) {
+				return Heading.EASTERLY;
+			}
+			break;
+		case LEFT:
+			if (x < 0) {
+				/*
+				 * TODO
+				 * if (z < blockEdge) {
+				 
+					if (z - blockEdge < x) { // more z then x
+						return Heading.NORTHERLY;
+					} else if (z - blockEdge > x) { // more x then z
+						return Heading.WESTERLY;
+					} else {
+						return Heading.UNCLEAR;
+					}
+				} else if (z >= blockEdge2) {
+					if ( - (z - blockEdge2) < x) { // more z then x
+						return Heading.SOUTHERLY;
+					} else if ( - (z - blockEdge2) > x) { // more x then z
+						return Heading.WESTERLY;
+					} else {
+						return Heading.UNCLEAR;
+					}
+				} else {
+					return Heading.WESTERLY;
+				}
+				*/
+				return Heading.WESTERLY;
+			} else if (z < blockEdge) {
+				return Heading.NORTHERLY;
+			} else if (z >= blockEdge2) {
+				return Heading.SOUTHERLY;
+			}
+			break;
+		case RIGHT:
+			if (z < blockEdge) {
+				return Heading.NORTHERLY;
+			} else if (z >= blockEdge2) {
+				return Heading.SOUTHERLY;
+			}
+			break;
+		case TOP:
+			if (z < 0) {
+				return Heading.NORTHERLY;
+			} else if (x < blockEdge) {
+				return Heading.WESTERLY;
+			} else if (x >= blockEdge2) {
+				return Heading.EASTERLY;
+			}
+			break;
+		case FRONT:
+		case UNCLEAR:
+		default:
+			return Heading.UNCLEAR;
+		}
+		return Heading.UNCLEAR;
+	}
 
 	
 	/**
@@ -211,25 +310,49 @@ public class MCILayer {
 	 * @param location
 	 * @return
 	 */
-	public Location moveAtBorder(Location prior, Location location) {
-		Vector direction = new Vector(prior.getX() - location.getX(), prior.getY() - location.getY(), prior.getZ() - location.getZ());
+	public Location moveAtBorder(Location prior, Location loc) {
+		MCInfinity.getPlugin().info("Remap border movement. Beginning with {0} to {1}", prior, loc);
+		Location location = loc.clone();
+
+		double x = location.getX();
+		double z = location.getZ();
 		
-		Heading motion = getHeading(direction.getX(), direction.getZ()); 
+		Zone zone = getZone(prior.getBlockX(), prior.getBlockZ());
+		Heading motion = getDepartureEdge(zone, location);
 		if (Heading.UNCLEAR.equals(motion)) return prior;
 		
-		switch(getZone(prior.getBlockX(), prior.getBlockZ())) {
+		switch(zone) {
+		case UNCLEAR:
+			MCInfinity.getPlugin().info("Remap border movement. Ending with out of bounds");
+			return prior;
 		case LEFT:
 			switch(motion) {
 			case NORTHERLY:
 				// Move into TOP from the "left" side
+				location.setYaw(location.getYaw() + 90f); // 90 clockwise
+				// x becomes z
+				// blockEdge2 - z becomes x
+				x = blockEdge2 - location.getZ();
+				z = location.getX();
 				break;
 			case WESTERLY:
 				// Move into BACK from the "right" side
+				// no yaw change
+				// z is z
+				// x is x + blockEdge4
+				x = location.getX() + maxX;
+				z = location.getZ();
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from the "left" side
+				location.setYaw(location.getYaw() - 90f); // 90 counter
+				// x becomes z - blockEdge
+				// z becomes blockEdge3-x
+				x = location.getZ() - blockEdge;
+				z = maxZ - location.getX();
 				break;
 			default: // moving normally
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
 				return location;
 			}
 			break;
@@ -237,14 +360,30 @@ public class MCILayer {
 			switch(motion) {
 			case NORTHERLY:
 				// Move into BACK from the "top" side
+				location.setYaw(location.getYaw() + 180f); // 180 clockwise
+				// x becomes blockEdge3 + (blockEdge2-x)
+				// z becomes blockEdge + (- z)
+				x = maxZ + (blockEdge2 - location.getX());
+				z = blockEdge - location.getZ();
 				break;
 			case WESTERLY:
 				// Move into LEFT from the "top" side
+				location.setYaw(location.getYaw() - 90f); // 90 counter
+				// x becomes z
+				// z becomes blockEdge2 - x
+				x = location.getZ();
+				z = blockEdge2 - location.getX();
 				break;
 			case EASTERLY:
 				// Move into RIGHT from the "top" side
+				location.setYaw(location.getYaw() + 90f); // 90 clockwise
+				// z becomes x - blockEdge
+				// x becomes blockEdge3 - z
+				x = maxZ - location.getZ();
+				z = location.getX() - blockEdge;
 				break;
 			default:
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
 				return location;
 			}
 			break;
@@ -255,14 +394,30 @@ public class MCILayer {
 			switch(motion) {
 			case SOUTHERLY:
 				// Move into BACK from "bottom" side
+				location.setYaw(location.getYaw() - 180f); // 180 counter
+				// x becomes blockEdge3 + blockEdge2 - x
+				// z becomes blockEdge + blockEdge4 - z
+				x = maxZ + blockEdge2 - location.getX();
+				z = blockEdge + maxX - location.getZ();
 				break;
 			case WESTERLY:
 				// Move into LEFT from "bottom" side
+				location.setYaw(location.getYaw() + 90f); // 90 clockwise
+				// x becomes blockEdge3 - z
+				// z becomes blockEdge + x);
+				x = maxZ - location.getZ();
+				z = blockEdge + location.getX();
 				break;
 			case EASTERLY:
 				// Move into RIGHT from "bottom" side
+				location.setYaw(location.getYaw() - 90f); // 90 counter
+				// x becomes z
+				// z becomes blockEdge4 - x
+				x = location.getZ();
+				z = maxX - location.getX();
 				break;
 			default:
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
 				return location;
 			}
 			break;
@@ -270,14 +425,30 @@ public class MCILayer {
 			switch(motion) {
 			case NORTHERLY:
 				// Move into TOP from "top" side
+				location.setYaw(location.getYaw() - 180f); // 180 counter
+				// x becomes blockEdge + (blockEdge4 - x)
+				// z becomes blockEdge - z
+				x = blockEdge + (maxX - location.getX());
+				z = blockEdge - location.getZ();
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from the "bottom" side
+				location.setYaw(location.getYaw() + 180f); // 180 clockwise
+				// x becomes blockEdge + (blockEdge4 - x)
+				// z becomes blockEdge2 + (blockEdge3 - z)
+				x = blockEdge + (maxX - location.getX());
+				z = blockEdge2 + (maxZ - location.getZ());
 				break;
 			case EASTERLY:
 				// Move into LEFT from the "left" side
+				// No Yaw change
+				// x becomes x - blockEdge4
+				// z unchanged
+				x = location.getX() - maxX;
+				z = location.getZ();
 				break;
 			default:
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
 				return location;
 			}
 			break;
@@ -285,15 +456,30 @@ public class MCILayer {
 			switch(motion) {
 			case NORTHERLY:
 				// Move into TOP from "right" side
+				location.setYaw(location.getYaw() - 90f); // 90 counter
+				// x becomes blockEdge + z
+				// z becomes blockEdge3 - x
+				x = blockEdge + location.getZ();
+				z = maxZ - location.getX();
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from "right" side
+				location.setYaw(location.getYaw() + 90f); // 90 clockwise
+				// x becomes blockEdge4 - z
+				// z becomes x
+				x = maxX - location.getZ();
+				z = location.getX();
 				break;
 			default:
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
 				return location;
 			}
 			break;
 		}
+		location.setX(x);
+		location.setZ(z);
+
+		MCInfinity.getPlugin().info("Remap border movement. Ending with {0} to {1} from zone {2} with heading {3} into zone {4}", prior, location, zone, motion, getZone(location.getBlockX(), location.getBlockZ()));
 		return location;
 	}
 

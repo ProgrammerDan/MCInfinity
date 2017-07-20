@@ -97,6 +97,7 @@ public class MCInfinity extends JavaPlugin {
 		if (!this.isEnabled()) return;
 		try {
 			this.playerLocationManager = new PlayerLocationManager(getConfig());
+			this.playerLocationManager.ready();
 		} catch (Exception e) {
 			this.severe("Failed to set up player universe location handling", e);
 			this.setEnabled(false);
@@ -159,13 +160,13 @@ public class MCInfinity extends JavaPlugin {
 			
 			long distance = worldConfig.getLong("distance-from-sun", -1);
 			if (distance < 1) {
-				this.warning("Failed to configure world {}, distance from sun invalid- add a `distance-from-sun` value in your world config.", world);
+				this.warning("Failed to configure world {0}, distance from sun invalid- add a `distance-from-sun` value in your world config.", world);
 				continue;
 			}
 			
 			ConfigurationSection layers = worldConfig.getConfigurationSection("layers");
 			if (layers == null) {
-				this.warning("Failed to configure world {}, no layers defined- add a `layers` section to your world config.", world);
+				this.warning("Failed to configure world {0}, no layers defined- add a `layers` section to your world config.", world);
 				continue;
 			}
 			
@@ -180,29 +181,31 @@ public class MCInfinity extends JavaPlugin {
 				
 				String mcWorld = layerConfig.getString("world");
 				if (mcWorld == null) {
-					this.warning("Failed to configure world {}, layer {} defined without a world. Be sure each layer has a `world` defined.", world, layer);
+					this.warning("Failed to configure world {0}, layer {1} defined without a world. Be sure each layer has a `world` defined.", world, layer);
 					error = true;
 					break;
 				}
 				
 				ConfigurationSection connectConfig = layerConfig.getConfigurationSection("connect");
+				String top = null;
+				String bottom = null;
 				if (connectConfig == null) {
-					this.info("World {}, layer {} has no external connections. This might not have been your intention?", world, layer);
+					this.info("World {0}, layer {1} has no external connections. This might not have been your intention?", world, layer);
+				} else {
+					top = connectConfig.getString("top");
+					bottom = connectConfig.getString("bottom");
 				}
-				
-				String top = connectConfig.getString("top");
-				String bottom = connectConfig.getString("bottom");
 				
 				MCILayer mciLayer = new MCILayer(layer, mciWorld, edge, spawn, launch, mcWorld, top, bottom);
 				mciWorld.addLayer(mciLayer);
 			}
 			if (!error) {
 				if (mciWorld.compile()) {
-					this.info("Configured world {} for use!", world);
+					this.info("Configured world {0} for use!", world);
 					this.worlds.put(world, mciWorld);
 					this.spawnLayers.addAll(mciWorld.getSpawnLayers());
 				} else {
-					this.warning("Failed to prepare world {} for real use, disabled!", world);
+					this.warning("Failed to prepare world {0} for real use, disabled!", world);
 				}
 			}
 		}

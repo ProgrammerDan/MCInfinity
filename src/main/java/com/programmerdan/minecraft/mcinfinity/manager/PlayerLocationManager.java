@@ -1,9 +1,15 @@
 package com.programmerdan.minecraft.mcinfinity.manager;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 
 import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 import com.programmerdan.minecraft.mcinfinity.model.MCILayer;
@@ -16,8 +22,11 @@ public class PlayerLocationManager {
 	List<MCILayer> spawnLayers;
 	List<MCIWorld> worlds;
 	
+	Map<UUID, MCIWorld> playerWorldMap;
+	
 	public PlayerLocationManager(FileConfiguration config) {
 		plugin = MCInfinity.getPlugin();
+		playerWorldMap = new ConcurrentHashMap<UUID, MCIWorld>();
 	}
 	
 	public void ready() {
@@ -26,6 +35,16 @@ public class PlayerLocationManager {
 	}
 	
 	public void shutdown() {
+	}
+	
+	public void updatePlayer(Player player) {
+		for (MCIWorld world : worlds) {
+			MCILayer layer = world.getLayer(player.getLocation());
+			if (layer != null) {
+				playerWorldMap.put(player.getUniqueId(), world);
+				return;
+			}
+		}
 	}
 
 	/**
@@ -58,6 +77,28 @@ public class PlayerLocationManager {
 			tries --;
 		}
 		return null;
+	}
+
+	public boolean handlePlayerMovement(Player player, Location prior, Location next) {
+		if (!playerWorldMap.containsKey(player.getUniqueId())) {
+			updatePlayer(player);
+		}
+		MCILayer layer = playerWorldMap.get(player.getUniqueId()).getLayer(prior);
+		if (layer == null) { // WHERE ARE WE
+			plugin.debug("Outside world border at {0}", prior);
+			return false;
+		} else if (layer.inLayer(next)) {
+			return true;
+		} else {
+			// we've hit a boundary or border
+			Location newLocation = layer.moveAtBorder(prior, next);
+			Bukkit.getScheduler().runTask(plugin, new Runnable() {
+				public void run() {
+					player.teleport(newLocation, TeleportCause.PLUGIN);
+				}
+			});
+			return false;
+		}
 	}
 	
 }

@@ -1,11 +1,13 @@
 package com.programmerdan.minecraft.mcinfinity.listeners;
 
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.spigotmc.event.player.PlayerSpawnLocationEvent;
 
@@ -49,6 +51,16 @@ public class PlayerListener implements Listener {
 			return;
 		} else {
 			event.setSpawnLocation(manager.generateSafeRespawn());
+		}
+	}
+	
+	@EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
+	public void playerMoveEvent(PlayerMoveEvent event) {
+		Location prior = event.getFrom();
+		Location next = event.getTo();
+		
+		if (!plugin.getPlayerLocationManager().handlePlayerMovement(event.getPlayer(), prior, next)) {
+			event.setCancelled(true);
 		}
 	}
 	

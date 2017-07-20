@@ -22,33 +22,33 @@
 debug: true
 # edge size is in chunks
 edge: 10
-worlds:
- earth:
-  layers:
-   spawn-layer1:
-    world: world
-    spawn: true
-    launch: true
-    connect:
-     top: sky-layer1
-     bottom: cave-layer1
-   cave-layer1:
-    world: world-cave
-    spawn: false
-    launch: false
-    connect:
-     top: spawn-layer1
-     bottom: hell
-   sky-layer1:
-    world: world-sky
-    spawn: false
-    launch: true
-    connect:
-     bottom: spawn-layer1
-   hell:
-    world: world-nether
-    spawn: false
-    launch: false
-    connect:
-     top: cave-layer1
-  distance-from-sun: 149597870700 
+#worlds:
+# earth:
+#  layers:
+#   spawn-layer1:
+#    world: world
+#    spawn: true
+#    launch: true
+#    connect:
+#     top: sky-layer1
+#     bottom: cave-layer1
+#   cave-layer1:
+#    world: world-cave
+#    spawn: false
+#    launch: false
+#    connect:
+#     top: spawn-layer1
+#     bottom: hell
+#   sky-layer1:
+#    world: world-sky
+#    spawn: false
+#    launch: true
+#    connect:
+#     bottom: spawn-layer1
+#   hell:
+#    world: world-nether
+#    spawn: false
+#    launch: false
+#    connect:
+#     top: cave-layer1
+#  distance-from-sun: 149597870700 

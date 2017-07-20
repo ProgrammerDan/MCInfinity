@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Location;
 
@@ -22,6 +23,8 @@ public class MCIWorld {
 	public MCIWorld(String world, long distance) {
 		this.worldName = world;
 		this.distanceFromSun = distance;
+		layers = new ConcurrentHashMap<String, MCILayer>();
+		layersByWorld = new ConcurrentHashMap<UUID, MCILayer>();
 		
 		this.valid = false;
 	}
