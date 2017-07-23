@@ -1,12 +1,12 @@
 package com.programmerdan.minecraft.mcinfinity.model;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import org.bukkit.util.Vector;
 
 import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 import com.programmerdan.minecraft.mcinfinity.util.RandomProvider;
@@ -40,6 +40,10 @@ public class MCILayer {
 	private String bottomDefer;
 	
 	private int chunkEdge;
+	private int chunkEdge2;
+	private int chunkMaxX;
+	private int chunkMaxZ;
+	
 	private int blockEdge;
 	private int blockEdge2;
 	private int maxX;
@@ -55,6 +59,10 @@ public class MCILayer {
 		this.name = name;
 		this.world = mciWorld;
 		this.chunkEdge = edge;
+		this.chunkEdge2 = edge * 2;
+		this.chunkMaxX = edge * 4;
+		this.chunkMaxZ = edge * 3;
+		
 		this.blockEdge = edge * 16;
 		this.maxX = this.blockEdge * 4;
 		this.maxZ = this.blockEdge * 3;
@@ -155,6 +163,187 @@ public class MCILayer {
 		return false;
 	}
 
+	public boolean inLayer(Chunk chunk) {
+		if (!valid) return false;
+		if (chunk.getWorld() == this.mcWorld) {
+			return inLayer(chunk.getX(), chunk.getZ());
+		}
+		return false;
+	}
+	
+	/**
+	 * Chunklayer
+	 * 
+	 * @param x Chunk x
+	 * @param z Chunk z
+	 * @return true if in, false else
+	 */
+	private boolean inLayer(int x, int z) {
+		return ( x >= 0 && x < chunkMaxX && z >= 0 && z < chunkMaxZ && (
+				((x < chunkEdge || x >= chunkEdge2) && z >= chunkEdge && z < chunkEdge2)
+				||
+				x >= chunkEdge && x < chunkEdge2)
+			);
+	}
+	
+	// TODO: For chunks "outside" this layer, but if still in the world, how to resolve?
+	// For chunks more then 1 away from edge "outside" of edge, hide somehow.
+	// For chunks "along the edge", display shadow copies rotated to fit
+	// perhaps leverage ChunkSnapshot?
+	/**
+	 * Leverages Orebfuscator technology to transform chunk data for transmission when requested by
+	 * the client.
+	 * 
+	 * TODO: caching of some sort
+	 * 
+	 * @param origin
+	 * @param chunkXToSend
+	 * @param chunkZToSend
+	 * @return a ChunkData object with remapped data to fit the "orientation" of the player, if necessary, or null if not
+	 */
+	public RotatingChunkCoord remapChunk(Location origin, int chunkXToSend, int chunkZToSend) {
+		if (inLayer(chunkXToSend, chunkZToSend)) return null;
+		
+		Zone origination = getZone(origin.getBlockX(), origin.getBlockZ());
+		Heading edge = getChunkDepartureEdge(origination, chunkXToSend, chunkZToSend);
+		
+		if (Heading.UNCLEAR.equals(edge)) return null;
+		
+		int rotation = 0;
+		int x = 0;
+		int z = 0;
+		
+		switch(origination) {
+		case UNCLEAR:
+			MCInfinity.getPlugin().info("Remap chunk is unclear");
+			return null;
+		case LEFT:
+			switch(edge) {
+			case NORTHERLY:
+				// Move into TOP from the "left" side
+				rotation = 90;
+				x = chunkEdge2 - chunkZToSend;
+				z = chunkXToSend;
+				break;
+			case WESTERLY:
+				// Move into BACK from the "right" side
+				rotation = 0;
+				x = chunkXToSend + chunkMaxX;
+				z = chunkZToSend;
+				break;
+			case SOUTHERLY:
+				// Move into BOTTOM from the "left" side
+				rotation = -90;
+				x = chunkZToSend - chunkEdge;
+				z = chunkMaxZ - chunkXToSend;
+				break;
+			default: // moving normally
+				MCInfinity.getPlugin().info("Remap chunk. Ending with no change");
+				return null;
+			}
+			break;
+		case TOP:
+			switch(edge) {
+			case NORTHERLY:
+				// Move into BACK from the "top" side
+				rotation = 180;
+				x = chunkMaxZ + (chunkEdge2 - chunkXToSend);
+				z = chunkEdge - chunkZToSend;
+				break;
+			case WESTERLY:
+				// Move into LEFT from the "top" side
+				rotation = -90;
+				x = chunkZToSend;
+				z = chunkEdge2 - chunkXToSend;
+				break;
+			case EASTERLY:
+				// Move into RIGHT from the "top" side
+				rotation = 90;
+				x = chunkMaxZ - chunkZToSend;
+				z = chunkXToSend - chunkEdge;
+				break;
+			default:
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
+				return null;
+			}
+			break;
+		case FRONT:
+			// ???
+			return null;
+		case BOTTOM:
+			switch(edge) {
+			case SOUTHERLY:
+				// Move into BACK from "bottom" side
+				rotation = -180;
+				x = chunkMaxZ + chunkEdge2 - chunkXToSend;
+				z = chunkEdge + chunkMaxX - chunkZToSend;
+				break;
+			case WESTERLY:
+				// Move into LEFT from "bottom" side
+				rotation = 90;
+				x = chunkMaxZ - chunkZToSend;
+				z = chunkEdge + chunkXToSend;
+				break;
+			case EASTERLY:
+				// Move into RIGHT from "bottom" side
+				rotation = -90;
+				x = chunkZToSend;
+				z = chunkMaxX - chunkXToSend;
+				break;
+			default:
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
+				return null;
+			}
+			break;
+		case BACK:
+			switch(edge) {
+			case NORTHERLY:
+				// Move into TOP from "top" side
+				rotation = -180;
+				x = chunkEdge + (chunkMaxX - chunkXToSend);
+				z = chunkEdge - chunkZToSend;
+				break;
+			case SOUTHERLY:
+				// Move into BOTTOM from the "bottom" side
+				rotation = 180;
+				x = chunkEdge + (chunkMaxX - chunkXToSend);
+				z = chunkEdge2 + (chunkMaxZ - chunkZToSend);
+				break;
+			case EASTERLY:
+				// Move into LEFT from the "left" side
+				rotation = 0;
+				x = chunkXToSend - chunkMaxX;
+				z = chunkZToSend;
+				break;
+			default:
+				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
+				return null;
+			}
+			break;
+		case RIGHT:
+			switch(edge) {
+			case NORTHERLY:
+				// Move into TOP from "right" side
+				rotation = -90;
+				x = chunkEdge + chunkZToSend;
+				z = chunkMaxZ - chunkXToSend;
+				break;
+			case SOUTHERLY:
+				// Move into BOTTOM from "right" side
+				rotation = 90;
+				x = chunkMaxX - chunkZToSend;
+				z = chunkXToSend;
+				break;
+			default:
+				MCInfinity.getPlugin().info("Remap chunks. Ending with no change");
+				return null;
+			}
+			break;
+		}
+		
+		return new RotatingChunkCoord(x, z, rotation);
+	}
+	
 	/**
 	 * Compute our "zone" location.
 	 * 
@@ -228,6 +417,10 @@ public class MCILayer {
 	public Heading getDepartureEdge(Zone now, Location then) {
 		double x = then.getX();
 		double z = then.getZ();
+		return getDepartureEdge(now, x, z);
+	}
+	
+	private Heading getDepartureEdge(Zone now, double x, double z) {
 		switch(now) {		
 		case BACK:
 			if (x >= maxX) {
@@ -302,7 +495,66 @@ public class MCILayer {
 		}
 		return Heading.UNCLEAR;
 	}
-
+	/**
+	 * for chunks
+	 * @param now
+	 * @param x
+	 * @param z
+	 * @return
+	 */
+	private Heading getChunkDepartureEdge(Zone now, int x, int z) {
+		switch(now) {		
+		case BACK:
+			if (x >= chunkMaxX) {
+				return Heading.EASTERLY;
+			} else if (z < chunkEdge) {
+				return Heading.NORTHERLY;
+			} else if (z >= chunkEdge2) {
+				return Heading.SOUTHERLY;
+			}
+			break;
+		case BOTTOM:
+			if (z >= chunkMaxZ) {
+				return Heading.SOUTHERLY;
+			} else if (x < chunkEdge) {
+				return Heading.WESTERLY;
+			} else if (x >= chunkEdge2) {
+				return Heading.EASTERLY;
+			}
+			break;
+		case LEFT:
+			if (x < 0) {
+				return Heading.WESTERLY;
+			} else if (z < chunkEdge) {
+				return Heading.NORTHERLY;
+			} else if (z >= chunkEdge2) {
+				return Heading.SOUTHERLY;
+			}
+			break;
+		case RIGHT:
+			if (z < chunkEdge) {
+				return Heading.NORTHERLY;
+			} else if (z >= chunkEdge2) {
+				return Heading.SOUTHERLY;
+			}
+			break;
+		case TOP:
+			if (z < 0) {
+				return Heading.NORTHERLY;
+			} else if (x < chunkEdge) {
+				return Heading.WESTERLY;
+			} else if (x >= chunkEdge2) {
+				return Heading.EASTERLY;
+			}
+			break;
+		case FRONT:
+		case UNCLEAR:
+		default:
+			return Heading.UNCLEAR;
+		}
+		return Heading.UNCLEAR;
+	}
+	
 	
 	/**
 	 * We figure out where to "adjust" the location based on where it is trying to leave

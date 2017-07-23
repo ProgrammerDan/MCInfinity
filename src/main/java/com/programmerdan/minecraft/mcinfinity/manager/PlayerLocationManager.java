@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
@@ -14,6 +15,7 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 import com.programmerdan.minecraft.mcinfinity.model.MCILayer;
 import com.programmerdan.minecraft.mcinfinity.model.MCIWorld;
+import com.programmerdan.minecraft.mcinfinity.model.RotatingChunkCoord;
 
 public class PlayerLocationManager {
 	
@@ -101,4 +103,30 @@ public class PlayerLocationManager {
 		}
 	}
 	
+	public RotatingChunkCoord transformChunk(Player player, int chunkX, int chunkZ) {
+		MCIWorld world = playerWorldMap.get(player.getUniqueId());
+		if (world == null) {
+			updatePlayer(player);
+			world = playerWorldMap.get(player.getUniqueId());
+		}
+		
+		MCILayer layer = world.getLayer(player.getLocation());
+		if (layer == null) { // WHERE ARE WE
+			plugin.debug("Outside world border at {0}", player.getLocation());
+			return null;
+		} else {
+			return layer.remapChunk(player.getLocation(), chunkX, chunkZ);
+		}
+	}
+	
+	public World getPlayerWorld(Player player) {
+		MCIWorld world = playerWorldMap.get(player.getUniqueId());
+		if (world == null) {
+			updatePlayer(player);
+			world = playerWorldMap.get(player.getUniqueId());
+		}
+		
+		MCILayer layer = world.getLayer(player.getLocation());
+		return layer.getRealWorld();
+	}
 }

@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.programmerdan.minecraft.mcinfinity.commands.CommandHandler;
 import com.programmerdan.minecraft.mcinfinity.listeners.PlayerListener;
 import com.programmerdan.minecraft.mcinfinity.listeners.EntityListener;
+import com.programmerdan.minecraft.mcinfinity.listeners.PacketListener;
 import com.programmerdan.minecraft.mcinfinity.manager.PlayerLocationManager;
 import com.programmerdan.minecraft.mcinfinity.model.MCILayer;
 import com.programmerdan.minecraft.mcinfinity.model.MCIWorld;
@@ -28,6 +29,7 @@ public class MCInfinity extends JavaPlugin {
 	private PlayerListener playerListener;
 	private PlayerLocationManager playerLocationManager;
 	private EntityListener entityListener;
+	private PacketListener packetListener;
 	
 	private Map<String, MCIWorld> worlds;
 	private List<MCILayer> spawnLayers;
@@ -49,6 +51,7 @@ public class MCInfinity extends JavaPlugin {
 		registerPlayerLocationManager();
 		registerPlayerListener();
 		registerEntityListener();
+		registerPacketListener();
 		registerCommandHandler();
 	}
 	
@@ -58,6 +61,7 @@ public class MCInfinity extends JavaPlugin {
 		
 		if (this.playerLocationManager != null) this.playerLocationManager.shutdown();
 		if (this.playerListener != null) this.playerListener.shutdown();
+		if (this.packetListener != null) this.packetListener.shutdown();
 		if (this.entityListener != null) this.entityListener.shutdown();
 	}
 	
@@ -83,6 +87,10 @@ public class MCInfinity extends JavaPlugin {
 	
 	public PlayerListener getPlayerListener() {
 		return this.playerListener;
+	}
+	
+	public PacketListener getPacketListener() {
+		return this.packetListener;
 	}
 	
 	public EntityListener getEntityListener() {
@@ -122,6 +130,16 @@ public class MCInfinity extends JavaPlugin {
 			this.severe("Failed to set up player event capture / handling", e);
 			this.setEnabled(false);
 		}	
+	}
+	
+	private void registerPacketListener() {
+		if (!this.isEnabled()) return;
+		try {
+			this.packetListener = new PacketListener(getConfig());
+		} catch (Exception e) {
+			this.severe("Failed to set up packet intercept", e);
+			this.setEnabled(false);
+		}
 	}
 	
 	private void registerEntityListener() {
