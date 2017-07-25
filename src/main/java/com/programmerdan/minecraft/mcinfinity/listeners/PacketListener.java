@@ -73,20 +73,13 @@ public class PacketListener {
                 
                 ((MCInfinity) plugin).info("Replacing chunk {0} {1} transmission with chunk {2}, {3} rotated {4} degrees", chunkX, chunkZ,
                 		toSend.x, toSend.z, toSend.rotation);
-                //TODO
-                //byteArray.write(0, new byte[byteArray.read(0).length]);
-                //event.setCancelled(true);
                 
         		WorldServer worldServer = ((CraftWorld)locationManager.getPlayerWorld(event.getPlayer())).getHandle();
         		ChunkProviderServer chunkProviderServer = worldServer.getChunkProviderServer();
         		
         		Chunk chunk = chunkProviderServer.getOrLoadChunkAt(toSend.x, toSend.z);
         		
-        		//PlayerChunkMap chunkMap = worldServer.getPlayerChunkMap();
-        		
-        		//PlayerChunk playerChunk = chunkMap.getChunk(toSend.x, toSend.z);
-        		
-        		RotatingChunk rotChunk = new RotatingChunk(chunk, toSend.rotation); // a guess
+        		RotatingChunk rotChunk = new RotatingChunk(chunk, toSend.rotation);
         		
         		/*ChunkData chunkData = new ChunkData();
         		chunkData.chunkX = ints.read(0);
