@@ -51,10 +51,10 @@ public class RotatingChunk {
 	
 	private int rotX(int x, int z) {
 		if (rotation == 90) {
-			// x becomes z, z becomes x
+			// x becomes z, z becomes 16-x
 			return z;
 		} else if (rotation == -90 || rotation == 270) {
-			// x becomes 16-z, x becomes 16-x
+			// x becomes 16-z, z becomes x
 			return 15-z;
 		} else if (rotation == 180 || rotation == -180) {
 			// x becomes 16-x, z becomes 16-z
@@ -65,11 +65,11 @@ public class RotatingChunk {
 	}
 	private int rotZ(int x, int z) {
 		if (rotation == 90) {
-			// x becomes z, z becomes x
-			return x;
-		} else if (rotation == -90 || rotation == 270) {
-			// x becomes 16-z, x becomes 16-x
+			// x becomes z, z becomes 16-x
 			return 15-x;
+		} else if (rotation == -90 || rotation == 270) {
+			// x becomes 16-z, z becomes x
+			return x;
 		} else if (rotation == 180 || rotation == -180) {
 			return 15-z;
 		}
