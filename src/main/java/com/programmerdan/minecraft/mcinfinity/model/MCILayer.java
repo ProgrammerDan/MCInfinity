@@ -48,6 +48,17 @@ public class MCILayer {
 	private int blockEdge2;
 	private int maxX;
 	private int maxZ;
+
+	private int ichunkEdge;
+	private int ichunkEdge2;
+	private int ichunkMaxX;
+	private int ichunkMaxZ;
+	
+	private int iblockEdge;
+	private int iblockEdge2;
+	private int imaxX;
+	private int imaxZ;
+
 	
 	private boolean spawn;
 	private boolean launch;
@@ -67,6 +78,17 @@ public class MCILayer {
 		this.maxX = this.blockEdge * 4;
 		this.maxZ = this.blockEdge * 3;
 		this.blockEdge2 = this.blockEdge *2;
+		
+		this.ichunkEdge = this.chunkEdge - 1;
+		this.ichunkEdge2 = this.chunkEdge2 - 1;
+		this.ichunkMaxX = this.chunkMaxX - 1;
+		this.ichunkMaxZ = this.chunkMaxZ - 1;
+		
+		this.iblockEdge = this.blockEdge - 1;
+		this.iblockEdge2 = this.blockEdge2 - 1;
+		this.imaxX = this.maxX - 1;
+		this.imaxZ = this.maxZ - 1;
+		
 		this.spawn = spawn;
 		this.launch = launch;
 		this.mcWorldDefer = mcWorld;
@@ -221,8 +243,8 @@ public class MCILayer {
 			switch(edge) {
 			case NORTHERLY:
 				// Move into TOP from the "left" side
-				rotation = 90;
-				x = chunkEdge2 - chunkZToSend;
+				rotation = -90;
+				x = ichunkEdge2 - chunkZToSend;
 				z = chunkXToSend;
 				break;
 			case WESTERLY:
@@ -233,9 +255,9 @@ public class MCILayer {
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from the "left" side
-				rotation = -90;
-				x = chunkZToSend - chunkEdge;
-				z = chunkMaxZ - chunkXToSend;
+				rotation = 90;
+				x = chunkZToSend - ichunkEdge;
+				z = ichunkMaxZ - chunkXToSend;
 				break;
 			default: // moving normally
 				MCInfinity.getPlugin().info("Remap chunk. Ending with no change");
@@ -247,20 +269,20 @@ public class MCILayer {
 			case NORTHERLY:
 				// Move into BACK from the "top" side
 				rotation = 180;
-				x = chunkMaxZ + (chunkEdge2 - chunkXToSend);
-				z = chunkEdge - chunkZToSend;
+				x = chunkMaxZ + (ichunkEdge2 - chunkXToSend);
+				z = ichunkEdge - chunkZToSend;
 				break;
 			case WESTERLY:
 				// Move into LEFT from the "top" side
-				rotation = -90;
+				rotation = 90;
 				x = chunkZToSend;
-				z = chunkEdge2 - chunkXToSend;
+				z = ichunkEdge2 - chunkXToSend;
 				break;
 			case EASTERLY:
 				// Move into RIGHT from the "top" side
-				rotation = 90;
-				x = chunkMaxZ - chunkZToSend;
-				z = chunkXToSend - chunkEdge;
+				rotation = -90;
+				x = ichunkMaxZ - chunkZToSend;
+				z = chunkXToSend - ichunkEdge;
 				break;
 			default:
 				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
@@ -275,20 +297,20 @@ public class MCILayer {
 			case SOUTHERLY:
 				// Move into BACK from "bottom" side
 				rotation = -180;
-				x = chunkMaxZ + chunkEdge2 - chunkXToSend;
-				z = chunkEdge + chunkMaxX - chunkZToSend;
+				x = chunkMaxZ + ichunkEdge2 - chunkXToSend;
+				z = chunkEdge + ichunkMaxX - chunkZToSend;
 				break;
 			case WESTERLY:
 				// Move into LEFT from "bottom" side
-				rotation = 90;
-				x = chunkMaxZ - chunkZToSend;
+				rotation = -90;
+				x = ichunkMaxZ - chunkZToSend;
 				z = chunkEdge + chunkXToSend;
 				break;
 			case EASTERLY:
 				// Move into RIGHT from "bottom" side
-				rotation = -90;
+				rotation = 90;
 				x = chunkZToSend;
-				z = chunkMaxX - chunkXToSend;
+				z = ichunkMaxX - chunkXToSend;
 				break;
 			default:
 				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
@@ -300,19 +322,19 @@ public class MCILayer {
 			case NORTHERLY:
 				// Move into TOP from "top" side
 				rotation = -180;
-				x = chunkEdge + (chunkMaxX - chunkXToSend);
-				z = chunkEdge - chunkZToSend;
+				x = chunkEdge + (ichunkMaxX - chunkXToSend);
+				z = ichunkEdge - chunkZToSend;
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from the "bottom" side
 				rotation = 180;
-				x = chunkEdge + (chunkMaxX - chunkXToSend);
-				z = chunkEdge2 + (chunkMaxZ - chunkZToSend);
+				x = chunkEdge + (ichunkMaxX - chunkXToSend);
+				z = chunkEdge2 + (ichunkMaxZ - chunkZToSend);
 				break;
 			case EASTERLY:
 				// Move into LEFT from the "left" side
 				rotation = 0;
-				x = chunkXToSend - chunkMaxX;
+				x = chunkXToSend - ichunkMaxX;
 				z = chunkZToSend;
 				break;
 			default:
@@ -324,14 +346,14 @@ public class MCILayer {
 			switch(edge) {
 			case NORTHERLY:
 				// Move into TOP from "right" side
-				rotation = -90;
+				rotation = 90;
 				x = chunkEdge + chunkZToSend;
-				z = chunkMaxZ - chunkXToSend;
+				z = ichunkMaxZ - chunkXToSend;
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from "right" side
-				rotation = 90;
-				x = chunkMaxX - chunkZToSend;
+				rotation = -90;
+				x = ichunkMaxX - chunkZToSend;
 				z = chunkXToSend;
 				break;
 			default:
@@ -584,7 +606,7 @@ public class MCILayer {
 				location.setYaw(location.getYaw() + 90f); // 90 clockwise
 				// x becomes z
 				// blockEdge2 - z becomes x
-				x = blockEdge2 - location.getZ();
+				x = iblockEdge2 - location.getZ();
 				z = location.getX();
 				break;
 			case WESTERLY:
@@ -600,8 +622,8 @@ public class MCILayer {
 				location.setYaw(location.getYaw() - 90f); // 90 counter
 				// x becomes z - blockEdge
 				// z becomes blockEdge3-x
-				x = location.getZ() - blockEdge;
-				z = maxZ - location.getX();
+				x = location.getZ() - iblockEdge;
+				z = imaxZ - location.getX();
 				break;
 			default: // moving normally
 				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
@@ -615,8 +637,8 @@ public class MCILayer {
 				location.setYaw(location.getYaw() + 180f); // 180 clockwise
 				// x becomes blockEdge3 + (blockEdge2-x)
 				// z becomes blockEdge + (- z)
-				x = maxZ + (blockEdge2 - location.getX());
-				z = blockEdge - location.getZ();
+				x = maxZ + (iblockEdge2 - location.getX());
+				z = iblockEdge - location.getZ();
 				break;
 			case WESTERLY:
 				// Move into LEFT from the "top" side
@@ -624,15 +646,15 @@ public class MCILayer {
 				// x becomes z
 				// z becomes blockEdge2 - x
 				x = location.getZ();
-				z = blockEdge2 - location.getX();
+				z = iblockEdge2 - location.getX();
 				break;
 			case EASTERLY:
 				// Move into RIGHT from the "top" side
 				location.setYaw(location.getYaw() + 90f); // 90 clockwise
 				// z becomes x - blockEdge
 				// x becomes blockEdge3 - z
-				x = maxZ - location.getZ();
-				z = location.getX() - blockEdge;
+				x = imaxZ - location.getZ();
+				z = location.getX() - iblockEdge;
 				break;
 			default:
 				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
@@ -649,15 +671,15 @@ public class MCILayer {
 				location.setYaw(location.getYaw() - 180f); // 180 counter
 				// x becomes blockEdge3 + blockEdge2 - x
 				// z becomes blockEdge + blockEdge4 - z
-				x = maxZ + blockEdge2 - location.getX();
-				z = blockEdge + maxX - location.getZ();
+				x = maxZ + iblockEdge2 - location.getX();
+				z = blockEdge + imaxX - location.getZ();
 				break;
 			case WESTERLY:
 				// Move into LEFT from "bottom" side
 				location.setYaw(location.getYaw() + 90f); // 90 clockwise
 				// x becomes blockEdge3 - z
-				// z becomes blockEdge + x);
-				x = maxZ - location.getZ();
+				// z becomes blockEdge + x
+				x = imaxZ - location.getZ();
 				z = blockEdge + location.getX();
 				break;
 			case EASTERLY:
@@ -666,7 +688,7 @@ public class MCILayer {
 				// x becomes z
 				// z becomes blockEdge4 - x
 				x = location.getZ();
-				z = maxX - location.getX();
+				z = imaxX - location.getX();
 				break;
 			default:
 				MCInfinity.getPlugin().info("Remap border movement. Ending with no change");
@@ -680,23 +702,23 @@ public class MCILayer {
 				location.setYaw(location.getYaw() - 180f); // 180 counter
 				// x becomes blockEdge + (blockEdge4 - x)
 				// z becomes blockEdge - z
-				x = blockEdge + (maxX - location.getX());
-				z = blockEdge - location.getZ();
+				x = blockEdge + (imaxX - location.getX());
+				z = iblockEdge - location.getZ();
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from the "bottom" side
 				location.setYaw(location.getYaw() + 180f); // 180 clockwise
 				// x becomes blockEdge + (blockEdge4 - x)
 				// z becomes blockEdge2 + (blockEdge3 - z)
-				x = blockEdge + (maxX - location.getX());
-				z = blockEdge2 + (maxZ - location.getZ());
+				x = blockEdge + (imaxX - location.getX());
+				z = blockEdge2 + (imaxZ - location.getZ());
 				break;
 			case EASTERLY:
 				// Move into LEFT from the "left" side
 				// No Yaw change
 				// x becomes x - blockEdge4
 				// z unchanged
-				x = location.getX() - maxX;
+				x = location.getX() - imaxX;
 				z = location.getZ();
 				break;
 			default:
@@ -712,14 +734,14 @@ public class MCILayer {
 				// x becomes blockEdge + z
 				// z becomes blockEdge3 - x
 				x = blockEdge + location.getZ();
-				z = maxZ - location.getX();
+				z = imaxZ - location.getX();
 				break;
 			case SOUTHERLY:
 				// Move into BOTTOM from "right" side
 				location.setYaw(location.getYaw() + 90f); // 90 clockwise
 				// x becomes blockEdge4 - z
 				// z becomes x
-				x = maxX - location.getZ();
+				x = imaxX - location.getZ();
 				z = location.getX();
 				break;
 			default:
