@@ -7,12 +7,18 @@ package com.programmerdan.minecraft.mcinfinity.listeners;
 
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.craftbukkit.v1_12_R1.CraftWorld;
+import org.bukkit.craftbukkit.v1_12_R1.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 
 import com.comphenix.protocol.PacketType;
@@ -23,6 +29,9 @@ import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.reflect.StructureModifier;
+import com.comphenix.protocol.wrappers.MultiBlockChangeInfo;
+import com.comphenix.protocol.wrappers.WrappedBlockData;
+import com.comphenix.protocol.wrappers.ChunkCoordIntPair;
 import com.comphenix.protocol.wrappers.nbt.NbtCompound;
 import com.comphenix.protocol.wrappers.nbt.NbtFactory;
 /*import com.lishid.orebfuscator.Orebfuscator;
@@ -31,12 +40,15 @@ import com.lishid.orebfuscator.config.WorldConfig;
 import com.lishid.orebfuscator.obfuscation.Calculations;*/
 import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 import com.programmerdan.minecraft.mcinfinity.manager.PlayerLocationManager;
+import com.programmerdan.minecraft.mcinfinity.model.ChunkCoord;
 import com.programmerdan.minecraft.mcinfinity.model.RotatingChunkCoord;
 import com.programmerdan.minecraft.mcinfinity.nms.RotatingChunk;
 
+import net.minecraft.server.v1_12_R1.Blocks;
 import net.minecraft.server.v1_12_R1.Chunk;
 import net.minecraft.server.v1_12_R1.ChunkProviderServer;
 import net.minecraft.server.v1_12_R1.PacketPlayOutMapChunk;
+import net.minecraft.server.v1_12_R1.PacketPlayOutUnloadChunk;
 import net.minecraft.server.v1_12_R1.PlayerChunk;
 import net.minecraft.server.v1_12_R1.PlayerChunkMap;
 import net.minecraft.server.v1_12_R1.WorldServer;
@@ -49,6 +61,27 @@ public class PacketListener {
 	public PacketListener(FileConfiguration config) {
 		this.plugin = MCInfinity.getPlugin();
         this.manager = ProtocolLibrary.getProtocolManager();
+        
+        this.manager.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST, PacketType.Play.Server.UNLOAD_CHUNK) {
+        	@Override
+        	public void onPacketSending(PacketEvent event) {
+        		PacketContainer packet = event.getPacket();
+        		StructureModifier<Integer> ints = packet.getIntegers();
+        		
+        		int chunkX = ints.read(0);
+        		int chunkZ = ints.read(1);
+        		
+        		PlayerLocationManager locationManager = ( (MCInfinity) plugin).getPlayerLocationManager();
+
+        		Player player = event.getPlayer();
+        		
+        		RotatingChunkCoord toSend = locationManager.transformChunk(player, chunkX, chunkZ);
+                if (toSend == null) return; // no manip
+                
+                ((MCInfinity) plugin).info("Informing player to unload chunk {0} {1}", chunkX, chunkZ);
+                locationManager.clearTransformChunk(player, chunkX, chunkZ);
+        	}
+        });
 
         this.manager.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST, PacketType.Play.Server.MAP_CHUNK) {
             @Override
@@ -68,13 +101,22 @@ public class PacketListener {
                 
                 int chunkX = ints.read(0);
                 int chunkZ = ints.read(1);
-                RotatingChunkCoord toSend = locationManager.transformChunk(event.getPlayer(), chunkX, chunkZ);
+                
+                Player player = event.getPlayer();
+                
+                RotatingChunkCoord toSend = locationManager.transformChunk(player, chunkX, chunkZ);
                 if (toSend == null) return; // no manip
                 
-                ((MCInfinity) plugin).info("Replacing chunk {0} {1} transmission with chunk {2}, {3} rotated {4} degrees", chunkX, chunkZ,
-                		toSend.x, toSend.z, toSend.rotation);
+                locationManager.addTransformChunk(player, chunkX, chunkZ);
                 
-        		WorldServer worldServer = ((CraftWorld)locationManager.getPlayerWorld(event.getPlayer())).getHandle();
+                if (toSend.equals(RotatingChunkCoord.EmptyChunk)) { // clear this data.
+                    ((MCInfinity) plugin).info("Suppressing chunk {0} {1} transmission as its out of the world", chunkX, chunkZ);
+                } else {
+	                ((MCInfinity) plugin).info("Replacing chunk {0} {1} transmission with chunk {2}, {3} rotated {4} degrees", chunkX, chunkZ,
+	                		toSend.x, toSend.z, toSend.rotation);
+                }
+                
+        		WorldServer worldServer = ((CraftWorld)locationManager.getPlayerWorld(player)).getHandle();
         		ChunkProviderServer chunkProviderServer = worldServer.getChunkProviderServer();
         		
         		Chunk chunk = chunkProviderServer.getOrLoadChunkAt(toSend.x, toSend.z);
@@ -100,7 +142,8 @@ public class PacketListener {
 					e.printStackTrace();
 				}*/
         		try {
-        			PacketPlayOutMapChunk mapPacket = rotChunk.rotate(ints.read(2));
+        			PacketPlayOutMapChunk mapPacket = toSend.equals(RotatingChunkCoord.EmptyChunk) ? 
+        					rotChunk.clearChunk(ints.read(2)) : rotChunk.rotate(ints.read(2));
         			byte[] newData = null;
         			try {
         				Field dField = PacketPlayOutMapChunk.class.getDeclaredField("d"); // byte[] array
@@ -138,6 +181,70 @@ public class PacketListener {
 
 	public void shutdown() {
 		// TODO Auto-generated method stub
+		
+	}
+
+	/**
+	 * Rapid fire unload all transformed chunks. 
+	 * 
+	 * My hope is will trigger a request to reload
+	 * 
+	 * @param player
+	 */
+	public void registerChunkRefresh(Player player) {
+		
+		Set<ChunkCoord> resend = ( (MCInfinity) plugin).getPlayerLocationManager().getTransformChunks(player);
+		
+		for (ChunkCoord chunk : resend) {
+			((CraftPlayer)player).getHandle().playerConnection.sendPacket(new PacketPlayOutUnloadChunk(chunk.x, chunk.z));
+		}
+
+		PlayerLocationManager locationManager = ( (MCInfinity) plugin).getPlayerLocationManager();
+		World world = locationManager.getPlayerWorld(player);
+		WorldServer worldServer = ((CraftWorld) world).getHandle();
+		ChunkProviderServer chunkProviderServer = worldServer.getChunkProviderServer();
+		
+		for (ChunkCoord chunk : resend) {
+			if (chunkProviderServer.isLoaded(chunk.x, chunk.z)) {
+				Chunk toSend = chunkProviderServer.getChunkAt(chunk.x, chunk.z);
+				((CraftPlayer)player).getHandle().playerConnection.sendPacket(new PacketPlayOutMapChunk(toSend, 0xffff));
+			}
+		}
+		
+		long ticks = 0l;
+		for (ChunkCoord chunk : resend) {
+			Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
+				@Override
+				public void run() {
+					// TODO Auto-generated method stub
+					if (chunkProviderServer.isLoaded(chunk.x, chunk.z)) {
+						PacketContainer bulkupdate = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
+						
+						bulkupdate.getChunkCoordIntPairs().write(0, new ChunkCoordIntPair(chunk.x, chunk.z));
+						/*StructureModifier<Integer> ints = bulkupdate.getIntegers();
+						ints.write(0, chunk.x);
+						ints.write(1, chunk.z);*/
+						StructureModifier<MultiBlockChangeInfo[]> blockdata = bulkupdate.getMultiBlockChangeInfoArrays();
+					
+						MultiBlockChangeInfo[] datas = new MultiBlockChangeInfo[4];
+						ChunkCoordIntPair ccip = new ChunkCoordIntPair(chunk.x, chunk.z);
+						WrappedBlockData wbd = new WrappedBlockData(Blocks.BARRIER.getBlockData());
+
+						int i = 0;
+						for (short y = 4; y < 256; y+=64) {
+							short loc = (short) (8 << 12 | 8 << 8 | y);
+							datas[i++] = new MultiBlockChangeInfo( loc, new WrappedBlockData(Blocks.BARRIER.getBlockData()), new ChunkCoordIntPair(chunk.x, chunk.z));
+						}
+						blockdata.write(0, datas);
+						try {
+							ProtocolLibrary.getProtocolManager().sendServerPacket(player, bulkupdate);
+						} catch (InvocationTargetException e) {
+							plugin.warning("Failed to force a chunk update via ficticious block updates", e);
+						}
+					}
+				}
+			}, ticks++);
+		}
 		
 	}
 

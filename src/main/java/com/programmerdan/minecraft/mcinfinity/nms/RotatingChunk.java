@@ -4,9 +4,12 @@ import java.lang.reflect.Field;
 
 import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 
+import net.minecraft.server.v1_12_R1.Blocks;
 import net.minecraft.server.v1_12_R1.Chunk;
 import net.minecraft.server.v1_12_R1.ChunkSnapshot;
+import net.minecraft.server.v1_12_R1.IBlockData;
 import net.minecraft.server.v1_12_R1.PacketPlayOutMapChunk;
+import net.minecraft.server.v1_12_R1.World;
 
 public class RotatingChunk {
 	
@@ -35,18 +38,22 @@ public class RotatingChunk {
 		PacketPlayOutMapChunk newOut = new PacketPlayOutMapChunk(rotChunk, i);
 		
 		return newOut;
-		/*try {
-			Field dField = PacketPlayOutMapChunk.class.getDeclaredField("d"); // byte[] array
-		
-			dField.setAccessible(true);
-			
-			return (byte[]) dField.get(newOut);
-		}catch (IllegalAccessException | NoSuchFieldException | SecurityException e) {
-			MCInfinity.getPlugin().debug("Failed to remap chunk {0}", origin);
+	}
+	
+	public PacketPlayOutMapChunk clearChunk(int i) {
+		ChunkSnapshot snapshot = new ChunkSnapshot();
+		for (int x = 0; x < 16; x++) {
+			for (int z = 0; z < 16; z++) {
+				for (int y = 0; y < 256; y++) {
+					snapshot.a(x,y,z, Blocks.BARRIER.getBlockData());
+				}
+			}
 		}
+		Chunk rotChunk = new Chunk(origin.getWorld(), snapshot, origin.locX, origin.locZ);
 		
-		return null; // rotation failed.
-		*/
+		PacketPlayOutMapChunk newOut = new PacketPlayOutMapChunk(rotChunk, i);
+		
+		return newOut;		
 	}
 	
 	private int rotX(int x, int z) {

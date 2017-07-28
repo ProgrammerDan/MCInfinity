@@ -229,7 +229,7 @@ public class MCILayer {
 		Zone origination = getZone(origin.getBlockX(), origin.getBlockZ());
 		Heading edge = getChunkDepartureEdge(origination, chunkXToSend, chunkZToSend);
 		
-		if (Heading.UNCLEAR.equals(edge)) return null;
+		if (Heading.UNCLEAR.equals(edge)) return RotatingChunkCoord.EmptyChunk;
 		
 		int rotation = 0;
 		int x = 0;
@@ -238,7 +238,7 @@ public class MCILayer {
 		switch(origination) {
 		case UNCLEAR:
 			MCInfinity.getPlugin().info("Remap chunk is unclear");
-			return null;
+			return RotatingChunkCoord.EmptyChunk;
 		case LEFT:
 			switch(edge) {
 			case NORTHERLY:
@@ -527,46 +527,56 @@ public class MCILayer {
 	private Heading getChunkDepartureEdge(Zone now, int x, int z) {
 		switch(now) {		
 		case BACK:
-			if (x >= chunkMaxX) {
+			if (x >= chunkMaxX && z >= chunkEdge && z < chunkEdge2) {
 				return Heading.EASTERLY;
-			} else if (z < chunkEdge) {
-				return Heading.NORTHERLY;
-			} else if (z >= chunkEdge2) {
-				return Heading.SOUTHERLY;
+			} else if (x < chunkMaxX && x >= chunkMaxZ) {
+				if (z < chunkEdge) {
+					return Heading.NORTHERLY;
+				} else if (z >= chunkEdge2) {
+					return Heading.SOUTHERLY;
+				}
 			}
 			break;
 		case BOTTOM:
-			if (z >= chunkMaxZ) {
+			if (z >= chunkMaxZ && x >= chunkEdge && x < chunkEdge2) {
 				return Heading.SOUTHERLY;
-			} else if (x < chunkEdge) {
-				return Heading.WESTERLY;
-			} else if (x >= chunkEdge2) {
-				return Heading.EASTERLY;
+			} else if (z < chunkMaxZ && z >= chunkEdge2) {
+				if (x < chunkEdge) {
+					return Heading.WESTERLY;
+				} else if (x >= chunkEdge2) {
+					return Heading.EASTERLY;
+				}
 			}
 			break;
 		case LEFT:
-			if (x < 0) {
+			if (x < 0 && z >= chunkEdge && z < chunkEdge2) {
 				return Heading.WESTERLY;
-			} else if (z < chunkEdge) {
-				return Heading.NORTHERLY;
-			} else if (z >= chunkEdge2) {
-				return Heading.SOUTHERLY;
+			} else if (x >= 0 && x < chunkEdge) {
+				if (z < chunkEdge) {
+					return Heading.NORTHERLY;
+				} else if (z >= chunkEdge2) {
+					return Heading.SOUTHERLY;
+				}
 			}
 			break;
 		case RIGHT:
-			if (z < chunkEdge) {
-				return Heading.NORTHERLY;
-			} else if (z >= chunkEdge2) {
-				return Heading.SOUTHERLY;
+			if (x >= chunkEdge2 && x < chunkMaxZ) {
+				if (z < chunkEdge) {
+					return Heading.NORTHERLY;
+				} else if (z >= chunkEdge2) {
+					return Heading.SOUTHERLY;
+				}
 			}
 			break;
 		case TOP:
-			if (z < 0) {
+			if (z < 0 && x >= chunkEdge && x < chunkEdge2) {
 				return Heading.NORTHERLY;
-			} else if (x < chunkEdge) {
-				return Heading.WESTERLY;
-			} else if (x >= chunkEdge2) {
-				return Heading.EASTERLY;
+			} else if (z >= 0 && z < chunkEdge) {
+				if (x < chunkEdge) {
+					return Heading.WESTERLY;
+				} else if (x >= chunkEdge2) {
+					return Heading.EASTERLY;
+				}
 			}
 			break;
 		case FRONT:
