@@ -42,6 +42,7 @@ import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 import com.programmerdan.minecraft.mcinfinity.manager.PlayerLocationManager;
 import com.programmerdan.minecraft.mcinfinity.model.ChunkCoord;
 import com.programmerdan.minecraft.mcinfinity.model.RotatingChunkCoord;
+import com.programmerdan.minecraft.mcinfinity.model.MCILayer.Zone;
 import com.programmerdan.minecraft.mcinfinity.nms.RotatingChunk;
 
 import net.minecraft.server.v1_12_R1.Blocks;
@@ -76,9 +77,13 @@ public class PacketListener {
         		Player player = event.getPlayer();
         		
         		RotatingChunkCoord toSend = locationManager.transformChunk(player, chunkX, chunkZ);
-                if (toSend == null) return; // no manip
+                if (toSend == null) {
+                	locationManager.clearNormalChunk(player, chunkX, chunkZ);
+                	return; // no manip
+                }
                 
-                ((MCInfinity) plugin).info("Informing player to unload chunk {0} {1}", chunkX, chunkZ);
+                ((MCInfinity) plugin).info("Player in {4} {5}: Informing player to unload chunk {0} {1} which we mapped to {2} {3}", 
+                		chunkX, chunkZ, toSend.x, toSend.z, player.getLocation().getChunk().getX(), player.getLocation().getChunk().getZ());
                 locationManager.clearTransformChunk(player, chunkX, chunkZ);
         	}
         });
@@ -105,15 +110,19 @@ public class PacketListener {
                 Player player = event.getPlayer();
                 
                 RotatingChunkCoord toSend = locationManager.transformChunk(player, chunkX, chunkZ);
-                if (toSend == null) return; // no manip
+                if (toSend == null) {
+                	locationManager.addNormalChunk(player, chunkX, chunkZ);
+                	return; // no manip
+                }
                 
                 locationManager.addTransformChunk(player, chunkX, chunkZ);
                 
                 if (toSend.equals(RotatingChunkCoord.EmptyChunk)) { // clear this data.
-                    ((MCInfinity) plugin).info("Suppressing chunk {0} {1} transmission as its out of the world", chunkX, chunkZ);
+                    ((MCInfinity) plugin).info("Player in {2} {3}: Suppressing chunk {0} {1} transmission as its out of the world", chunkX, chunkZ,
+                    		player.getLocation().getChunk().getX(), player.getLocation().getChunk().getZ());
                 } else {
-	                ((MCInfinity) plugin).info("Replacing chunk {0} {1} transmission with chunk {2}, {3} rotated {4} degrees", chunkX, chunkZ,
-	                		toSend.x, toSend.z, toSend.rotation);
+	                ((MCInfinity) plugin).info("Player in {5} {6}: Replacing chunk {0} {1} transmission with chunk {2} {3} rotated {4} degrees", chunkX, chunkZ,
+	                		toSend.x, toSend.z, toSend.rotation, player.getLocation().getChunk().getX(), player.getLocation().getChunk().getZ());
                 }
                 
         		WorldServer worldServer = ((CraftWorld)locationManager.getPlayerWorld(player)).getHandle();
@@ -191,7 +200,11 @@ public class PacketListener {
 	 * 
 	 * @param player
 	 */
-	public void registerChunkRefresh(Player player) {
+	public void registerChunkRefresh(Player player, Zone zone) {
+		
+		MCInfinity.getPlugin().debug("Player in {1} {2}: Forcing dump of chunks that we know we've messed up to {0}", player.getName(),
+				player.getLocation().getChunk().getX(), player.getLocation().getChunk().getZ());
+		
 		
 		Set<ChunkCoord> resend = ( (MCInfinity) plugin).getPlayerLocationManager().getTransformChunks(player);
 		
@@ -246,6 +259,30 @@ public class PacketListener {
 			}, ticks++);
 		}
 		
+		if (zone != null) { // have a zone, update "WB" effects
+			// TODO: likely remove this at some point ... OK for now
+			switch(zone) {
+			case BACK:
+				break;
+			case BOTTOM:
+				break;
+			case FRONT:
+				break;
+			case LEFT:
+				
+				
+				break;
+			case RIGHT:
+				break;
+			case TOP:
+				break;
+			case UNCLEAR:
+				break;
+			default:
+				break;
+			
+			}
+		}
 	}
 
 /*    @SuppressWarnings("rawtypes")

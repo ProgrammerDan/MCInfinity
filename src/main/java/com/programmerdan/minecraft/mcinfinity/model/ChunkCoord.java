@@ -1,6 +1,6 @@
 package com.programmerdan.minecraft.mcinfinity.model;
 
-public class ChunkCoord {
+public class ChunkCoord implements Comparable<ChunkCoord>{
 
 	public int x;
 	public int z;
@@ -23,4 +23,10 @@ public class ChunkCoord {
 	public int hashCode() {
 		return 73 + 17 * x + 31 * z;
 	}
+
+	@Override
+	public int compareTo(ChunkCoord o) {
+		return o.x < this.x ? -1 : o.x > this.x ? 1 : o.z < this.z ? -1 : o.z > this.z ? 1 : 0;
+	}
+
 }

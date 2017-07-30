@@ -20,6 +20,7 @@ import com.google.common.collect.Sets;
 import com.programmerdan.minecraft.mcinfinity.MCInfinity;
 import com.programmerdan.minecraft.mcinfinity.model.ChunkCoord;
 import com.programmerdan.minecraft.mcinfinity.model.MCILayer;
+import com.programmerdan.minecraft.mcinfinity.model.MCILayer.Zone;
 import com.programmerdan.minecraft.mcinfinity.model.MCIWorld;
 import com.programmerdan.minecraft.mcinfinity.model.RotatingChunkCoord;
 
@@ -32,11 +33,13 @@ public class PlayerLocationManager {
 	
 	Map<UUID, MCIWorld> playerWorldMap;
 	ConcurrentMap<UUID, Set<ChunkCoord>> playerTransformChunks;
+	ConcurrentMap<UUID, Set<ChunkCoord>> playerNormalChunks;
 	
 	public PlayerLocationManager(FileConfiguration config) {
 		plugin = MCInfinity.getPlugin();
 		playerWorldMap = new ConcurrentHashMap<UUID, MCIWorld>();
 		playerTransformChunks = new ConcurrentHashMap<UUID, Set<ChunkCoord>>();
+		playerNormalChunks = new ConcurrentHashMap<UUID, Set<ChunkCoord>>();
 	}
 	
 	public void ready() {
@@ -102,12 +105,16 @@ public class PlayerLocationManager {
 			player.teleport(generateSafeRespawn());
 			return false;
 		} else if (layer.inLayer(next)) {
-			if (!layer.getZone(prior.getBlockX(), prior.getBlockZ()).equals(layer.getZone(next.getBlockX(), next.getBlockZ()))) {
+			Zone priorZone = layer.getZone(prior.getBlockX(), prior.getBlockZ());
+			Zone nextZone = layer.getZone(next.getBlockX(), next.getBlockZ());
+			if (!priorZone.equals(nextZone)) {
 				Bukkit.getScheduler().runTask(plugin, new Runnable() {
 					@Override
 					public void run() {
-						if (player != null)
-							plugin.getPacketListener().registerChunkRefresh(player);
+						if (player != null) {
+							plugin.debug("***Player {0} MOVING FROM ZONE {1} TO ZONE {2}***", player.getName(), priorZone, nextZone);
+							plugin.getPacketListener().registerChunkRefresh(player, nextZone);
+						}
 					}
 				});
 			}
@@ -115,9 +122,13 @@ public class PlayerLocationManager {
 		} else {
 			// we've hit a boundary or border
 			Location newLocation = layer.moveAtBorder(prior, next);
+			Zone priorZone = layer.getZone(prior.getBlockX(), prior.getBlockZ());
+			Zone nextZone = layer.getZone(newLocation.getBlockX(), newLocation.getBlockZ());
+			plugin.debug("***Player {0} MOVING FROM ZONE {1} TO ZONE {2}***", player.getName(), priorZone, nextZone);
 			Bukkit.getScheduler().runTask(plugin, new Runnable() {
 				public void run() {
 					player.teleport(newLocation, TeleportCause.PLUGIN);
+					plugin.getPacketListener().registerChunkRefresh(player, nextZone);
 				}
 			});
 			return false;
@@ -193,4 +204,45 @@ public class PlayerLocationManager {
 		});
 	}
 
+	/**
+	 * Gets an unmodifiable set representing the normal chunks at the point in time of this request.
+	 * 
+	 * @param player
+	 * @return a set of ChunkCoord representing unmanaged chunks visible to the player.
+	 */
+	public Set<ChunkCoord> getNormalChunks(Player player) {
+		return ImmutableSet.copyOf(playerNormalChunks.compute(player.getUniqueId(), (uuid, inset) -> {
+			if (inset == null) return Sets.newConcurrentHashSet();
+			return inset;
+		}));
+	}
+
+	/**
+	 * Clears a particular normal chunk from tracking.
+	 * 
+	 * @param player
+	 * @param chunkX
+	 * @param chunkZ
+	 */
+	public void clearNormalChunk(Player player, int chunkX, int chunkZ) {
+		playerNormalChunks.computeIfPresent(player.getUniqueId(), (uuid, inset) -> {
+			inset.remove(new ChunkCoord(chunkX, chunkZ));
+			return inset;
+		});
+	}
+
+	/**
+	 * Adds a particular normal chunk to tracking.
+	 * 
+	 * @param player
+	 * @param chunkX
+	 * @param chunkZ
+	 */
+	public void addNormalChunk(Player player, int chunkX, int chunkZ) {
+		playerNormalChunks.compute(player.getUniqueId(), (uuid, inset) -> {
+			if (inset == null) inset = Sets.newConcurrentHashSet();
+			inset.add(new ChunkCoord(chunkX, chunkZ));
+			return inset;
+		});
+	}
 }
