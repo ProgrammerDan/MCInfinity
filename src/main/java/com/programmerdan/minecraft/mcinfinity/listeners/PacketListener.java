@@ -58,6 +58,7 @@ public class PacketListener {
 	
 	private MCInfinity plugin;
     private ProtocolManager manager;
+    private int viewDistance = Bukkit.getServer().getViewDistance();
 
 	public PacketListener(FileConfiguration config) {
 		this.plugin = MCInfinity.getPlugin();
@@ -202,7 +203,7 @@ public class PacketListener {
 	 */
 	public void registerChunkRefresh(Player player, Zone zone) {
 		
-		MCInfinity.getPlugin().debug("Player in {1} {2}: Forcing dump of chunks that we know we've messed up to {0}", player.getName(),
+		MCInfinity.getPlugin().debug("Player in {1} {2}: Forcing dump of chunks that we know we have messed up to {0}", player.getName(),
 				player.getLocation().getChunk().getX(), player.getLocation().getChunk().getZ());
 		
 		
@@ -216,49 +217,21 @@ public class PacketListener {
 		World world = locationManager.getPlayerWorld(player);
 		WorldServer worldServer = ((CraftWorld) world).getHandle();
 		ChunkProviderServer chunkProviderServer = worldServer.getChunkProviderServer();
-		
+
+		long ticks = 0l;
 		for (ChunkCoord chunk : resend) {
 			if (chunkProviderServer.isLoaded(chunk.x, chunk.z)) {
 				Chunk toSend = chunkProviderServer.getChunkAt(chunk.x, chunk.z);
 				((CraftPlayer)player).getHandle().playerConnection.sendPacket(new PacketPlayOutMapChunk(toSend, 0xffff));
+				Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+					@Override
+					public void run() {
+						triggerChunkRefresh(chunkProviderServer, player, chunk, true, null);
+					}
+				}, ticks++);
 			}
 		}
-		
-		long ticks = 0l;
-		for (ChunkCoord chunk : resend) {
-			Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
-				@Override
-				public void run() {
-					// TODO Auto-generated method stub
-					if (chunkProviderServer.isLoaded(chunk.x, chunk.z)) {
-						PacketContainer bulkupdate = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
-						
-						bulkupdate.getChunkCoordIntPairs().write(0, new ChunkCoordIntPair(chunk.x, chunk.z));
-						/*StructureModifier<Integer> ints = bulkupdate.getIntegers();
-						ints.write(0, chunk.x);
-						ints.write(1, chunk.z);*/
-						StructureModifier<MultiBlockChangeInfo[]> blockdata = bulkupdate.getMultiBlockChangeInfoArrays();
-					
-						MultiBlockChangeInfo[] datas = new MultiBlockChangeInfo[4];
-						ChunkCoordIntPair ccip = new ChunkCoordIntPair(chunk.x, chunk.z);
-						WrappedBlockData wbd = new WrappedBlockData(Blocks.BARRIER.getBlockData());
 
-						int i = 0;
-						for (short y = 4; y < 256; y+=64) {
-							short loc = (short) (8 << 12 | 8 << 8 | y);
-							datas[i++] = new MultiBlockChangeInfo( loc, new WrappedBlockData(Blocks.BARRIER.getBlockData()), new ChunkCoordIntPair(chunk.x, chunk.z));
-						}
-						blockdata.write(0, datas);
-						try {
-							ProtocolLibrary.getProtocolManager().sendServerPacket(player, bulkupdate);
-						} catch (InvocationTargetException e) {
-							plugin.warning("Failed to force a chunk update via ficticious block updates", e);
-						}
-					}
-				}
-			}, ticks++);
-		}
-		
 		if (zone != null) { // have a zone, update "WB" effects
 			// TODO: likely remove this at some point ... OK for now
 			switch(zone) {
@@ -282,6 +255,112 @@ public class PacketListener {
 				break;
 			
 			}
+		}
+	}
+
+	public void triggerEdgeUpdate(Player player, Zone zone) {
+		Set<ChunkCoord> resend = plugin.getPlayerLocationManager().getTransformChunks(player);
+		
+		PlayerLocationManager locationManager = plugin.getPlayerLocationManager();
+		World world = locationManager.getPlayerWorld(player);
+		WorldServer worldServer = ((CraftWorld) world).getHandle();
+		ChunkProviderServer chunkProviderServer = worldServer.getChunkProviderServer();
+
+		long ticks = 0l;
+		for (ChunkCoord chunk : resend) {
+			if (chunkProviderServer.isLoaded(chunk.x, chunk.z)) {
+                RotatingChunkCoord toSend = locationManager.transformChunk(player, chunk.x, chunk.z);
+                if (toSend == null) {
+					Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+						@Override
+						public void run() {
+							triggerChunkRefresh(chunkProviderServer, player, chunk, false, null);
+						}
+					}, ticks++);
+                } else if (toSend.equals(RotatingChunkCoord.EmptyChunk)) { // clear this data.
+					Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+						@Override
+						public void run() {
+							triggerChunkRefresh(chunkProviderServer, player, chunk, true, null);
+						}
+					}, ticks++);
+                } else {
+					Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+						@Override
+						public void run() {
+							triggerChunkRefresh(chunkProviderServer, player, chunk, true, toSend);
+						}
+					}, ticks++);
+                }
+			}
+		}
+	}
+	
+	/**
+	 * This is NOT checked to see if chunk is loaded, that is responsibility of caller!
+	 * 
+	 * @param player the Player to send the update to
+	 * @param chunk The chunk to force an update for
+	 * @param fake to use real data? or fake data?
+	 * @param rotChunk if fake is true, and this is supplied, sends data from this rotChunk rather then the "real" chunk.
+	 * @return true if successful, false otherwise.
+	 */
+	public boolean triggerChunkRefresh(ChunkProviderServer chunks, Player player, ChunkCoord chunk, boolean fake, RotatingChunkCoord rotChunk) {
+		// First we send bogus data, then we send valid / or different / bogus data.
+		PacketContainer bulkupdate = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
+		bulkupdate.getChunkCoordIntPairs().write(0, new ChunkCoordIntPair(chunk.x, chunk.z));
+		StructureModifier<MultiBlockChangeInfo[]> blockdata = bulkupdate.getMultiBlockChangeInfoArrays();
+		MultiBlockChangeInfo[] datas = new MultiBlockChangeInfo[4];
+
+		int i = 0;
+		for (short y = 4; y < 256; y+=64) {
+			short loc = (short) (8 << 12 | 8 << 8 | y);
+			WrappedBlockData wbd = new WrappedBlockData(Blocks.AIR.getBlockData());
+			datas[i++] = new MultiBlockChangeInfo( loc, wbd, new ChunkCoordIntPair(chunk.x, chunk.z));
+		}
+		blockdata.write(0, datas);
+		try {
+			ProtocolLibrary.getProtocolManager().sendServerPacket(player, bulkupdate);
+		} catch (InvocationTargetException e) {
+			plugin.warning("Failed to force a chunk update via ficticious block updates", e);
+			return false;
+		}
+
+		// Second we send "real" or real bogus data.
+		
+		bulkupdate = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
+		bulkupdate.getChunkCoordIntPairs().write(0, new ChunkCoordIntPair(chunk.x, chunk.z));
+		blockdata = bulkupdate.getMultiBlockChangeInfoArrays();
+		datas = new MultiBlockChangeInfo[4];
+
+		i = 0;
+		for (short y = 4; y < 256; y+=64) {
+			short loc = (short) (8 << 12 | 8 << 8 | y);
+			WrappedBlockData wbd;
+			if (fake && rotChunk == null) {
+				wbd = new WrappedBlockData(Blocks.BARRIER.getBlockData());
+			} else if (fake) {
+				Chunk rotateChunk = chunks.getOrLoadChunkAt(rotChunk.x, rotChunk.z);
+				if (rotateChunk != null) {
+					RotatingChunk rChunk = new RotatingChunk(rotateChunk, rotChunk.rotation);
+					wbd = new WrappedBlockData(rotateChunk.a(rChunk.rotX(8, 8), y, rChunk.rotZ(8, 8)));
+				} else {
+					plugin.warning("Failed to force a chunk load to send a valid but extraneous block update");
+					return false;
+				}
+			} else {
+				Chunk nChunk = chunks.getChunkAt(chunk.x, chunk.z);
+				wbd = new WrappedBlockData(nChunk.a(8,y,8));
+			}
+			datas[i++] = new MultiBlockChangeInfo( loc, wbd, new ChunkCoordIntPair(chunk.x, chunk.z));
+		}
+		blockdata.write(0, datas);
+		try {
+			ProtocolLibrary.getProtocolManager().sendServerPacket(player, bulkupdate);
+			return true;
+		} catch (InvocationTargetException e) {
+			plugin.warning("Failed to force a chunk update via ficticious block updates", e);
+			return false;
 		}
 	}
 

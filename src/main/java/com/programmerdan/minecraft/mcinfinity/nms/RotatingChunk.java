@@ -56,7 +56,7 @@ public class RotatingChunk {
 		return newOut;		
 	}
 	
-	private int rotX(int x, int z) {
+	public int rotX(int x, int z) {
 		if (rotation == -90 || rotation == 270) {
 			// x becomes z, z becomes 16-x
 			return z;
@@ -70,7 +70,7 @@ public class RotatingChunk {
 		
 		return x;
 	}
-	private int rotZ(int x, int z) {
+	public int rotZ(int x, int z) {
 		if (rotation == -90 || rotation == 270) {
 			// x becomes z, z becomes 16-x
 			return 15-x;

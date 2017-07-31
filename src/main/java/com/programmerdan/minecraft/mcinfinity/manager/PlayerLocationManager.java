@@ -32,12 +32,14 @@ public class PlayerLocationManager {
 	List<MCIWorld> worlds;
 	
 	Map<UUID, MCIWorld> playerWorldMap;
+	Map<UUID, ChunkCoord> playerChunkMap;
 	ConcurrentMap<UUID, Set<ChunkCoord>> playerTransformChunks;
 	ConcurrentMap<UUID, Set<ChunkCoord>> playerNormalChunks;
 	
 	public PlayerLocationManager(FileConfiguration config) {
 		plugin = MCInfinity.getPlugin();
 		playerWorldMap = new ConcurrentHashMap<UUID, MCIWorld>();
+		playerChunkMap = new ConcurrentHashMap<UUID, ChunkCoord>();
 		playerTransformChunks = new ConcurrentHashMap<UUID, Set<ChunkCoord>>();
 		playerNormalChunks = new ConcurrentHashMap<UUID, Set<ChunkCoord>>();
 	}
@@ -58,6 +60,26 @@ public class PlayerLocationManager {
 				return;
 			}
 		}
+	}
+	
+	/**
+	 * Used to determine if player is in a new chunk. We also use this to detect if updates need to be sent due
+	 * to nearness to an edge and other shenanigans.
+	 * 
+	 * @param player
+	 * @return true if in a new chunk, false if in same chunk as before.
+	 */
+	public boolean isChunkUpdate(Player player) {
+		UUID uuid = player.getUniqueId();
+		ChunkCoord priorChunk = playerChunkMap.get(uuid);
+		ChunkCoord curChunk = new ChunkCoord(player.getLocation().getBlockX() >> 4, player.getLocation().getBlockZ() >> 4);
+		if (curChunk.equals(priorChunk)) return false;
+		playerChunkMap.put(uuid, curChunk);
+		return true;
+	}
+	
+	public ChunkCoord curChunk(UUID player) {
+		return playerChunkMap.get(player);
 	}
 
 	/**
@@ -103,6 +125,17 @@ public class PlayerLocationManager {
 			player.setFlying(false);
 			player.setGliding(false);
 			player.teleport(generateSafeRespawn());
+			Bukkit.getScheduler().runTask(plugin, new Runnable() {
+				@Override
+				public void run() {
+					if (player != null) {
+						Zone nextZone = layer.getZone(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+						plugin.debug("***Player {0} MOVING FROM OUTSIDE WORLD TO ZONE {1}***", player.getName(), nextZone);
+						plugin.getPacketListener().registerChunkRefresh(player, nextZone);
+						isChunkUpdate(player);
+					}
+				}
+			});
 			return false;
 		} else if (layer.inLayer(next)) {
 			Zone priorZone = layer.getZone(prior.getBlockX(), prior.getBlockZ());
@@ -114,9 +147,14 @@ public class PlayerLocationManager {
 						if (player != null) {
 							plugin.debug("***Player {0} MOVING FROM ZONE {1} TO ZONE {2}***", player.getName(), priorZone, nextZone);
 							plugin.getPacketListener().registerChunkRefresh(player, nextZone);
+							isChunkUpdate(player);
 						}
 					}
 				});
+			} else if (isChunkUpdate(player)) {
+				// we are in a new chunk, so check for edge nearness and facilitate freshness along those edges.
+				plugin.debug("***Player {0} MOVING TO NEW CHUNK IN ZONE {1}***", player.getName(), nextZone);
+				plugin.getPacketListener().triggerEdgeUpdate(player, nextZone);
 			}
 			return true;
 		} else {
@@ -128,7 +166,8 @@ public class PlayerLocationManager {
 			Bukkit.getScheduler().runTask(plugin, new Runnable() {
 				public void run() {
 					player.teleport(newLocation, TeleportCause.PLUGIN);
-					plugin.getPacketListener().registerChunkRefresh(player, nextZone);
+					//plugin.getPacketListener().registerChunkRefresh(player, nextZone);
+					isChunkUpdate(player);
 				}
 			});
 			return false;

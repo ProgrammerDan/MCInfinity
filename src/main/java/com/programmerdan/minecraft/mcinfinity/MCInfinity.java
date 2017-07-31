@@ -31,6 +31,7 @@ public class MCInfinity extends JavaPlugin {
 	private EntityListener entityListener;
 	private PacketListener packetListener;
 	
+	private int edge;
 	private Map<String, MCIWorld> worlds;
 	private List<MCILayer> spawnLayers;
 	
@@ -153,6 +154,14 @@ public class MCInfinity extends JavaPlugin {
 	}
 	
 	/**
+	 * @return The number of chunks on an edge of a world-face
+	 */
+	public int getEdge() {
+		if (!this.isEnabled()) return -1;
+		return this.edge;
+	}
+	
+	/**
 	 * This handles demuxxing the config into useable world configurations.
 	 * Basically does all the backend math and preconfiguration so that
 	 * transitions between zones and layers will be as seamless as MC lets us.
@@ -160,7 +169,7 @@ public class MCInfinity extends JavaPlugin {
 	 * @param config
 	 */
 	private void process(FileConfiguration config) {
-		int edge = config.getInt("edge", -1);
+		edge = config.getInt("edge", -1);
 		if (edge < 1) {
 			this.severe("Failed to set up sensible zone edge size! Be sure to set a meaningful `edge` value in the root config.");
 			this.setEnabled(false);
