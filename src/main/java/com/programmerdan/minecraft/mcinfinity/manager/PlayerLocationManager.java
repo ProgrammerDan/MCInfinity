@@ -124,18 +124,18 @@ public class PlayerLocationManager {
 			player.eject();
 			player.setFlying(false);
 			player.setGliding(false);
-			player.teleport(generateSafeRespawn());
-			Bukkit.getScheduler().runTask(plugin, new Runnable() {
+			Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 				@Override
 				public void run() {
-					if (player != null) {
+					player.teleport(generateSafeRespawn());
+					/*if (player != null) {
 						Zone nextZone = layer.getZone(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
 						plugin.debug("***Player {0} MOVING FROM OUTSIDE WORLD TO ZONE {1}***", player.getName(), nextZone);
 						plugin.getPacketListener().registerChunkRefresh(player, nextZone);
 						isChunkUpdate(player);
-					}
+					}*/
 				}
-			});
+			},1);
 			return false;
 		} else if (layer.inLayer(next)) {
 			Zone priorZone = layer.getZone(prior.getBlockX(), prior.getBlockZ());
@@ -163,14 +163,47 @@ public class PlayerLocationManager {
 			Zone priorZone = layer.getZone(prior.getBlockX(), prior.getBlockZ());
 			Zone nextZone = layer.getZone(newLocation.getBlockX(), newLocation.getBlockZ());
 			plugin.debug("***Player {0} MOVING FROM ZONE {1} TO ZONE {2}***", player.getName(), priorZone, nextZone);
-			Bukkit.getScheduler().runTask(plugin, new Runnable() {
+			Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 				public void run() {
 					player.teleport(newLocation, TeleportCause.PLUGIN);
 					//plugin.getPacketListener().registerChunkRefresh(player, nextZone);
-					isChunkUpdate(player);
+					//isChunkUpdate(player);
+				}
+			}, 1);
+			return false;
+		}
+	}
+	
+	/**
+	 * This handles the landing zone of a player teleportation.
+	 * Functionally it ensures that the teleport is to a safe location, and returns false if it isn't.
+	 * Then, if OK, schedules a chunk refresh.
+	 * 
+	 * @param player The player being teleported
+	 * @param target The location they are teleporting _into_.
+	 */
+	public boolean handlePlayerTeleport(Player player, Location target) {
+		if (!playerWorldMap.containsKey(player.getUniqueId())) {
+			updatePlayer(player);
+		}		
+		MCILayer layer = playerWorldMap.get(player.getUniqueId()).getLayer(target);
+		if (layer == null) {
+			plugin.debug("***Player {0} TRIED TO TELEPORT OUT OF WORLD!***", player.getName());
+			return false;
+		} else {
+			Zone targetZone = layer.getZone(target.getBlockX(), target.getBlockZ());
+			plugin.debug("***Player {0} TELEPORTING INTO {1} INTO ZONE {2}!***", player.getName(), layer.getName(), targetZone);
+			Bukkit.getScheduler().runTask(plugin, new Runnable() {
+				public void run() {
+					if (isChunkUpdate(player)) {
+						plugin.debug("***Player {0} TELEPORTING WAS INTO NEW CHUNK, REFRESHING!***", player.getName());
+						plugin.getPacketListener().registerChunkRefresh(player, targetZone);
+						
+						//plugin.getPacketListener().triggerEdgeUpdate(player, targetZone);
+					}
 				}
 			});
-			return false;
+			return true;
 		}
 	}
 	

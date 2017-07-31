@@ -11,7 +11,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -55,6 +58,8 @@ import net.minecraft.server.v1_12_R1.PlayerChunkMap;
 import net.minecraft.server.v1_12_R1.WorldServer;
 
 public class PacketListener {
+
+	private Map<UUID, Long> activeTransmissions = new ConcurrentHashMap<>();
 	
 	private MCInfinity plugin;
     private ProtocolManager manager;
@@ -86,6 +91,12 @@ public class PacketListener {
                 ((MCInfinity) plugin).info("Player in {4} {5}: Informing player to unload chunk {0} {1} which we mapped to {2} {3}", 
                 		chunkX, chunkZ, toSend.x, toSend.z, player.getLocation().getChunk().getX(), player.getLocation().getChunk().getZ());
                 locationManager.clearTransformChunk(player, chunkX, chunkZ);
+                /*Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+                			@Override
+                			public void run() {
+                				triggerChunkRefresh(null, player, new ChunkCoord(chunkX, chunkZ), true, null);                				
+                			}
+        				}, 1);*/
         	}
         });
 
@@ -192,16 +203,20 @@ public class PacketListener {
 	public void shutdown() {
 		// TODO Auto-generated method stub
 		
+		this.activeTransmissions.clear();
 	}
 
 	/**
-	 * Rapid fire unload all transformed chunks. 
-	 * 
-	 * My hope is will trigger a request to reload
-	 * 
-	 * @param player
+	 * Rapid fire unload all transformed chunks, data transmit, and "I'm new" packet transmits. 
+	 *  
+	 * @param player The player to bug with data
 	 */
 	public void registerChunkRefresh(Player player, Zone zone) {
+		// Looks like this could be a liability in the future, with players putting massive demands on the server by rapidly moving
+		// across the border. So we cleverly lock resource allocation with a simple "tag" -- if we start a new transmit, we abandon
+		// the old one. I'll continue to improve this.
+		final long xmitID = System.nanoTime();
+		activeTransmissions.put(player.getUniqueId(), xmitID);
 		
 		MCInfinity.getPlugin().debug("Player in {1} {2}: Forcing dump of chunks that we know we have messed up to {0}", player.getName(),
 				player.getLocation().getChunk().getX(), player.getLocation().getChunk().getZ());
@@ -209,26 +224,30 @@ public class PacketListener {
 		
 		Set<ChunkCoord> resend = ( (MCInfinity) plugin).getPlayerLocationManager().getTransformChunks(player);
 		
-		for (ChunkCoord chunk : resend) {
-			((CraftPlayer)player).getHandle().playerConnection.sendPacket(new PacketPlayOutUnloadChunk(chunk.x, chunk.z));
-		}
-
 		PlayerLocationManager locationManager = ( (MCInfinity) plugin).getPlayerLocationManager();
 		World world = locationManager.getPlayerWorld(player);
 		WorldServer worldServer = ((CraftWorld) world).getHandle();
 		ChunkProviderServer chunkProviderServer = worldServer.getChunkProviderServer();
 
+		// Basic thought here: We _always_ tell the client their data is bad (unload chunk), then we _try_ to force a 
+		// resend of the chunk data w/ a doubletap "refresh" to ensure display. This can be interrupted.
 		long ticks = 0l;
 		for (ChunkCoord chunk : resend) {
+			MCInfinity.getPlugin().debug("Player {0}: Dump Messed Up Chunk {1} {2}", player.getName(), chunk.x, chunk.z);
+			((CraftPlayer)player).getHandle().playerConnection.sendPacket(new PacketPlayOutUnloadChunk(chunk.x, chunk.z));
 			if (chunkProviderServer.isLoaded(chunk.x, chunk.z)) {
-				Chunk toSend = chunkProviderServer.getChunkAt(chunk.x, chunk.z);
-				((CraftPlayer)player).getHandle().playerConnection.sendPacket(new PacketPlayOutMapChunk(toSend, 0xffff));
 				Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 					@Override
 					public void run() {
+						if (!activeTransmissions.get(player.getUniqueId()).equals(xmitID)) return; // soft cancel if we start a new send during old send.
+						MCInfinity.getPlugin().debug("Player {0}: Xmit Messed Up Chunk {1} {2}", player.getName(), chunk.x, chunk.z);
+						Chunk toSend = chunkProviderServer.getChunkAt(chunk.x, chunk.z);
+						((CraftPlayer)player).getHandle().playerConnection.sendPacket(new PacketPlayOutMapChunk(toSend, 0xffff));
 						triggerChunkRefresh(chunkProviderServer, player, chunk, true, null);
 					}
 				}, ticks++);
+			} else {
+				MCInfinity.getPlugin().debug("Player {0}: Dump Mess Up Chunk {1} {2} Cancelled, unloaded", player.getName(), chunk.x, chunk.z);
 			}
 		}
 
@@ -258,7 +277,21 @@ public class PacketListener {
 		}
 	}
 
+	/**
+	 * This is a bit different from registerChunkRefresh, which gives whole new chunk data.
+	 * This instead says, "you've already gotten updated data, show it!" as the MC client
+	 * sometimes doesn't ... bother. 
+	 * 
+	 * Meant to be used on zone transitions that aren't over a teleport.
+	 * 
+	 * @param player The player moving
+	 * @param zone The zone they are moving into
+	 */
 	public void triggerEdgeUpdate(Player player, Zone zone) {
+
+		final long xmitID = System.nanoTime();
+		activeTransmissions.put(player.getUniqueId(), xmitID);
+
 		Set<ChunkCoord> resend = plugin.getPlayerLocationManager().getTransformChunks(player);
 		
 		PlayerLocationManager locationManager = plugin.getPlayerLocationManager();
@@ -274,6 +307,7 @@ public class PacketListener {
 					Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 						@Override
 						public void run() {
+							if (!activeTransmissions.get(player.getUniqueId()).equals(xmitID)) return; // soft cancel if we start a new send during old send.
 							triggerChunkRefresh(chunkProviderServer, player, chunk, false, null);
 						}
 					}, ticks++);
@@ -281,6 +315,7 @@ public class PacketListener {
 					Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 						@Override
 						public void run() {
+							if (!activeTransmissions.get(player.getUniqueId()).equals(xmitID)) return; // soft cancel if we start a new send during old send.
 							triggerChunkRefresh(chunkProviderServer, player, chunk, true, null);
 						}
 					}, ticks++);
@@ -288,6 +323,7 @@ public class PacketListener {
 					Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 						@Override
 						public void run() {
+							if (!activeTransmissions.get(player.getUniqueId()).equals(xmitID)) return; // soft cancel if we start a new send during old send.
 							triggerChunkRefresh(chunkProviderServer, player, chunk, true, toSend);
 						}
 					}, ticks++);

@@ -9,6 +9,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.spigotmc.event.player.PlayerSpawnLocationEvent;
 
 import com.programmerdan.minecraft.mcinfinity.MCInfinity;
@@ -60,6 +61,14 @@ public class PlayerListener implements Listener {
 		Location next = event.getTo();
 		
 		if (!plugin.getPlayerLocationManager().handlePlayerMovement(event.getPlayer(), prior, next)) {
+			event.setCancelled(true);
+		}
+	}
+	
+	@EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
+	public void playerTeleportEvent(PlayerTeleportEvent event) {
+		Location next = event.getTo();
+		if (!plugin.getPlayerLocationManager().handlePlayerTeleport(event.getPlayer(), next)) {
 			event.setCancelled(true);
 		}
 	}
